@@ -1,0 +1,1 @@
+ALTER USER noticias_user WITH SUPERUSER;

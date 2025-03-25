@@ -1,6 +1,6 @@
 import pika
 import json
-from classifier import process_news_message
+from noticias.utils.classifier import process_news_message
 import logging
 
 # Configuração de logs
@@ -29,10 +29,10 @@ def start_consumer():
                 logger.info(f"Processando mensagem: {body.decode()}")
                 if process_news_message(body):
                     ch.basic_ack(delivery_tag=method.delivery_tag)
-                    logger.info("Notícia processada com sucesso")
+                    logger.info("Noticia processada com sucesso")
                 else:
                     ch.basic_nack(delivery_tag=method.delivery_tag)
-                    logger.error("Falha ao processar notícia")
+                    logger.error("Falha ao processar noticia")
             except Exception as e:
                 logger.error(f"Erro no callback: {str(e)}")
 
