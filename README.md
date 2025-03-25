@@ -11,7 +11,7 @@ WSL2 (para Windows)
 1. Clone o repositório
 bash
 Copy
-git clone https://github.com/seu-usuario/noticias-api.git
+git clone https://github.com/mathst/jota_test.git
 cd noticias-api
 2. Configure o ambiente
 Crie um arquivo .env na raiz do projeto:
