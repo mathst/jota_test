@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/noticias
+      - QUEUE_URL=amqp://rabbitmq:5672
+    depends_on:
+      - rabbitmq
+      - db
+
+  consumer:
+    build: .
+    command: python ./scripts/start_consumer.py
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/noticias
+      - QUEUE_URL=amqp://rabbitmq:5672
+    depends_on:
+      - web
+      - rabbitmq
+      - db
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=noticias
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  rabbitmq_data:
+  postgres_data:

@@ -1,0 +1,65 @@
+{
+  "timestamp": "2025-03-24T20:50:08.821368",
+  "system": "news_classification",
+  "results": [
+    {
+      "name": "PostgreSQL Connection",
+      "status": "SUCCESS",
+      "message": "Conex\u00e3o bem-sucedida",
+      "timestamp": "2025-03-24 20:49:47"
+    },
+    {
+      "name": "RabbitMQ Status",
+      "status": "FAILED",
+      "message": "Servi\u00e7o n\u00e3o encontrado",
+      "timestamp": "2025-03-24 20:49:48"
+    },
+    {
+      "name": "Django API",
+      "status": "SUCCESS",
+      "message": "API respondendo",
+      "timestamp": "2025-03-24 20:49:48"
+    },
+    {
+      "name": "Consumer Process",
+      "status": "SUCCESS",
+      "message": "PID: 125748",
+      "timestamp": "2025-03-24 20:49:48"
+    },
+    {
+      "name": "Webhook Reception",
+      "status": "SUCCESS",
+      "message": "Not\u00edcia aceita para processamento",
+      "timestamp": "2025-03-24 20:49:48"
+    },
+    {
+      "name": "News Processing",
+      "status": "FAILED",
+      "message": "Not\u00edcia n\u00e3o apareceu no banco de dados",
+      "timestamp": "2025-03-24 20:50:08"
+    },
+    {
+      "name": "API Endpoint GET /api/noticias/",
+      "status": "SUCCESS",
+      "message": "Endpoint funcionando",
+      "timestamp": "2025-03-24 20:50:08"
+    },
+    {
+      "name": "API Endpoint GET /api/categorias/",
+      "status": "SUCCESS",
+      "message": "Endpoint funcionando",
+      "timestamp": "2025-03-24 20:50:08"
+    },
+    {
+      "name": "API Endpoint GET /api/subcategorias/",
+      "status": "SUCCESS",
+      "message": "Endpoint funcionando",
+      "timestamp": "2025-03-24 20:50:08"
+    }
+  ],
+  "summary": {
+    "total_tests": 9,
+    "successful_tests": 7,
+    "success_rate": 0.7777777777777778
+  }
+}
