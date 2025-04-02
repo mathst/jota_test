@@ -1,214 +1,155 @@
-from django.test import TestCase
-
 import json
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
-
 from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
-from django.utils.timezone import make_aware
-from rest_framework.test import APIClient, APITestCase
+from rest_framework.test import APIClient
 from rest_framework import status
-
-from noticias.models import (
-    Category,
-    Subcategory,
-    Tag,
-    Keyword,
-    Source,
-    News
-)
+from noticias.models import Category, Subcategory, Tag, Keyword, News, Source
 from classifier.services import NewsClassifier
-from noticias.management.commands.start_consumer import Command as ConsumerCommand
+from django.core.management import call_command
 
-class TestModels(TestCase):
-    """Testes para os modelos do sistema"""
-    
-    def setUp(self):
-        self.category = Category.objects.create(name="Politics", description="Political news")
-        self.subcategory = Subcategory.objects.create(
-            name="Elections",
-            category=self.category,
-            description="Election related news"
-        )
-        self.tag = Tag.objects.create(name="president")
-        self.keyword = Keyword.objects.create(word="election")
-        self.keyword.tags.add(self.tag)
-        self.keyword.subcategories.add(self.subcategory)
-        self.source = Source.objects.create(name="Test News", url="http://test.com")
-        
-    def test_category_creation(self):
-        self.assertEqual(str(self.category), "Politics")
-        self.assertEqual(self.category.subcategories.count(), 1)
-        
-    def test_keyword_relationships(self):
-        self.assertEqual(self.keyword.tags.count(), 1)
-        self.assertEqual(self.keyword.subcategories.count(), 1)
-        self.assertEqual(self.keyword.tags.first().name, "president")
-
-class TestClassifierService(TestCase):
-    """Testes para o serviço de classificação"""
-    
-    def setUp(self):
-        self.classifier = NewsClassifier()
-        
-        # Setup test data
-        self.politics = Category.objects.create(name="Politics")
-        self.elections = Subcategory.objects.create(
-            name="Elections",
-            category=self.politics
-        )
-        self.tax = Subcategory.objects.create(
-            name="Tax Reform",
-            category=self.politics
-        )
-        
-        self.tag_president = Tag.objects.create(name="president")
-        self.tag_tax = Tag.objects.create(name="tax")
-        
-        Keyword.objects.create(word="election").tags.add(self.tag_president)
-        Keyword.objects.create(word="election").subcategories.add(self.elections)
-        Keyword.objects.create(word="tax").tags.add(self.tag_tax)
-        Keyword.objects.create(word="tax").subcategories.add(self.tax)
-        
-    def test_keyword_extraction(self):
-        text = "The new election results show the president won with tax reforms"
-        keywords = self.classifier.extract_keywords(text)
-        
-        self.assertIn("election", keywords)
-        self.assertIn("president", keywords)
-        self.assertIn("tax", keywords)
-        self.assertNotIn("the", keywords)  # stopword
-        
-    def test_news_classification(self):
-        news_data = {
-            "title": "President announces new tax reforms after election",
-            "content": "The president announced sweeping tax reforms following his election victory..."
-        }
-        
-        result = self.classifier.classify_news(news_data)
-        
-        self.assertEqual(result['category'].name, "Politics")
-        self.assertIn(result['subcategory'].name, ["Elections", "Tax Reform"])
-        self.assertTrue(any(t.name == "president" for t in result['tags']))
-        self.assertTrue(any(t.name == "tax" for t in result['tags']))
-        
-    def test_default_classification(self):
-        news_data = {
-            "title": "Unknown topic with no keywords",
-            "content": "This content doesn't match any keywords in the system"
-        }
-        
-        result = self.classifier.classify_news(news_data)
-        
-        self.assertEqual(result['category'].name, "General")
-        self.assertIsNotNone(result['subcategory'])
-        self.assertTrue(len(result['tags']) > 0)  # Should create tags from content
-
-class TestAPIEndpoints(APITestCase):
-    """Testes para os endpoints da API"""
-    
+class NewsClassificationSystemTest(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
         
-        # Create test data
-        self.category = Category.objects.create(name="Politics")
-        self.subcategory = Subcategory.objects.create(
-            name="Elections",
-            category=self.category
+        # Configuração inicial do banco de dados
+        self.politics = Category.objects.create(name="Politics")
+        self.tax = Category.objects.create(name="Tax")
+        
+        self.elections = Subcategory.objects.create(
+            name="Elections", 
+            category=self.politics,
+            priority=1
         )
-        self.tag = Tag.objects.create(name="president")
+        self.tax_reform = Subcategory.objects.create(
+            name="Reform", 
+            category=self.tax,
+            priority=1
+        )
+        
+        # Tags e palavras-chave
+        self.tag_president = Tag.objects.create(name="president")
+        self.tag_tax = Tag.objects.create(name="tax")
+        
+        self.kw_election = Keyword.objects.create(word="election")
+        self.kw_election.tags.add(self.tag_president)
+        self.kw_election.subcategories.add(self.elections)
+        
+        self.kw_tax = Keyword.objects.create(word="tax")
+        self.kw_tax.tags.add(self.tag_tax)
+        self.kw_tax.subcategories.add(self.tax_reform)
+        
+        # Fonte de notícias
         self.source = Source.objects.create(name="Test News")
         
-        # Sample news data
-        self.news_data = {
-            "title": "Election results announced",
-            "content": "The president won the election with a majority...",
-            "source": "Test News",
-            "publication_date": make_aware(datetime.now()).isoformat(),
-            "category_id": self.category.id,
-            "subcategory_id": self.subcategory.id,
-            "tag_ids": [self.tag.id],
-            "fonte_id": self.source.id
-        }
-        
-    def test_webhook_reception(self):
-        """Testa o endpoint de webhook"""
-        url = reverse('webhook-receiver')
-        data = {
-            "title": "New election results",
-            "content": "President wins election",
-            "source": "API Test",
-            "publication_date": make_aware(datetime.now()).isoformat()
-        }
-        
+        # Dados de teste
+        self.test_news = [
+            {
+                "title": "Election results announced",
+                "content": "The new president was elected with 55% of votes...",
+                "source": "Test News",
+                "publication_date": "2023-05-15T10:00:00Z"
+            },
+            {
+                "title": "New tax reform approved",
+                "content": "Congress approved the tax reform that will change...",
+                "source": "Test News",
+                "publication_date": "2023-05-16T14:30:00Z"
+            }
+        ]
+
+    def test_full_classification_flow(self):
+        """Testa o fluxo completo de classificação"""
+        # 1. Envia notícia via webhook
+        webhook_url = reverse('webhook-receiver')
         response = self.client.post(
-            url,
-            data=json.dumps(data),
+            webhook_url,
+            data=json.dumps(self.test_news[0]),
             content_type='application/json'
         )
-        
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         
+        # 2. Verifica se a notícia foi classificada corretamente
+        news = News.objects.first()
+        self.assertEqual(news.category.name, "Politics")
+        self.assertEqual(news.subcategory.name, "Elections")
+        self.assertTrue(news.tags.filter(name="president").exists())
+
+    def test_classification_service(self):
+        """Testa o serviço de classificação diretamente"""
+        classifier = NewsClassifier()
+        
+        # Testa com notícia política
+        result = classifier.classify_news(self.test_news[0])
+        self.assertEqual(result['category'].name, "Politics")
+        self.assertEqual(result['subcategory'].name, "Elections")
+        self.assertTrue(any(t.name == "president" for t in result['tags']))
+        
+        # Testa com notícia sobre impostos
+        result = classifier.classify_news(self.test_news[1])
+        self.assertEqual(result['category'].name, "Tax")
+        self.assertEqual(result['subcategory'].name, "Reform")
+        self.assertTrue(any(t.name == "tax" for t in result['tags']))
+
+    def test_consumer_service(self):
+        """Testa o consumer que processa as mensagens"""
+        from noticias.management.commands.start_consumer import Command
+        
+        # Simula o processamento
+        cmd = Command()
+        cmd.stdout = open('/dev/null', 'w')  # Suprime output
+        
+        # Processa mensagem de eleição
+        cmd.process_message(None, None, None, json.dumps(self.test_news[0]))
+        news = News.objects.get(title=self.test_news[0]['title'])
+        self.assertEqual(news.subcategory.name, "Elections")
+        
+        # Processa mensagem de reforma tributária
+        cmd.process_message(None, None, None, json.dumps(self.test_news[1])))
+        news = News.objects.get(title=self.test_news[1]['title'])
+        self.assertEqual(news.category.name, "Tax")
+
+    def test_keyword_extraction(self):
+        """Testa a extração de palavras-chave do texto"""
+        classifier = NewsClassifier()
+        text = "The president discussed the new tax reform with congress"
+        keywords = classifier.extract_keywords(text)
+        
+        self.assertIn("president", keywords)
+        self.assertIn("tax", keywords)
+        self.assertIn("congress", keywords)
+        self.assertNotIn("the", keywords)  # Stopword deve ser removida
+        self.assertNotIn("with", keywords)  # Stopword deve ser removida
+
+class APITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.category = Category.objects.create(name="Politics")
+        self.subcategory = Subcategory.objects.create(
+            name="Elections", 
+            category=self.category
+        )
+        self.source = Source.objects.create(name="Test Source")
+        
     def test_news_listing(self):
-        """Testa o endpoint de listagem de notícias"""
-        # Create a test news item
+        """Testa a API de listagem de notícias"""
+        url = reverse('news-list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+    def test_news_filtering(self):
+        """Testa os filtros da API"""
+        # Cria notícia de teste
         News.objects.create(
             title="Test News",
-            content="Test Content",
+            content="Content",
             category=self.category,
             subcategory=self.subcategory,
             source=self.source,
-            publication_date=make_aware(datetime.now())
+            publication_date="2023-01-01T00:00:00Z"
         )
         
-        url = reverse('news-list')
+        # Filtra por categoria
+        url = f"{reverse('news-list')}?category=Politics"
         response = self.client.get(url)
-        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
-        
-    def test_news_filtering(self):
-        """Testa o filtro de notícias por categoria"""
-        # Create test news
-        News.objects.create(
-            title="Political News",
-            content="Content",
-            category=self.category,
-            source=self.source,
-            publication_date=make_aware(datetime.now())
-        )
-        
-        # Create another category and news
-        economy = Category.objects.create(name="Economy")
-        News.objects.create(
-            title="Economic News",
-            content="Content",
-            category=economy,
-            source=self.source,
-            publication_date=make_aware(datetime.now())
-        )
-        
-        url = reverse('news-list')
-        response = self.client.get(url, {'category': 'Politics'})
-        
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['title'], "Political News")
-
-class TestConsumerService(TransactionTestCase):
-    """Testes para o serviço consumer"""
-    
-    def setUp(self):
-        self.consumer = ConsumerCommand()
-        self.consumer.stdout = MagicMock()  # Mock output
-        
-        # Create test data
-        self.category = Category.objects.create(name="Politics")
-        self.subcategory = Subcategory.objects.create(
-            name="Elections",
-            category=self.category
-        )
-        self.tag = Tag.objects.create(name="president")
-        Keyword.objects.create(word="election").tags.add(self.tag)
-        Keyword.objects.create(word

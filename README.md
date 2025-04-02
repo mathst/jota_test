@@ -1,145 +1,95 @@
-Este projeto implementa uma solução completa para receber, classificar e gerenciar notícias através de uma API REST com Django, utilizando filas RabbitMQ para processamento assíncrono.
+Visão Geral
+Sistema que classifica automaticamente notícias em categorias, subcategorias e tags baseado em palavras-chave, utilizando:
 
-<!-- Recebimento: Webhook recebe notícias em JSON e coloca na fila.
+Django (backend)
 
-Processamento: Worker consome da fila, classifica e salva no banco.
+Django REST Framework (API)
 
-Classificação:
+PostgreSQL (banco de dados)
 
-Extrai palavras-chave do texto
+RabbitMQ (processamento assíncrono)
 
-Busca correspondências no banco de palavras-chave
+Docker (containerização)
 
-Determina categoria, subcategoria e tags
+🚀 Como Executar a Aplicação
+Pré-requisitos
+Docker e Docker Compose instalados
 
-Armazenamento: Salva a notícia classificada no banco de dados.
+Python 3.9+
 
-API: Disponibiliza endpoints para consulta e filtragem. -->
+Git (opcional)
 
-📋 Pré-requisitos
-Docker e Docker Compose
+1. Configuração Inicial
+# Clone o repositório (se aplicável)
+git clone [URL_DO_REPOSITORIO]
+cd nome-do-projeto
 
-Python 3.12+
+# Crie e ative o ambiente virtual (recomendado)
+python -m venv venv
+source venv/bin/activate  # Linux/MacOS
+venv\Scripts\activate     # Windows
 
-WSL2 (para Windows)
+# Instale as dependências
+pip install -r requirements.txt
 
-🚀 Instalação e Execução
-1. Clone o repositório
-bash
-Copy
-git clone https://github.com/mathst/jota_test.git
-cd noticias-api
-2. Configure o ambiente
-Crie um arquivo .env na raiz do projeto:
+2. Configuração do Ambiente
+Crie um arquivo .env na raiz do projeto com:
 
-ini
-Copy
-# Banco de dados
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=noticias
-
-# Django
-SECRET_KEY=sua-chave-secreta-aqui
 DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
+SECRET_KEY=sua-chave-secreta-aqui
+DB_NAME=noticias
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_HOST=localhost
+DB_PORT=5432
+QUEUE_URL=amqp://guest:guest@localhost:5672//
 
-# RabbitMQ
-RABBITMQ_DEFAULT_USER=guest
-RABBITMQ_DEFAULT_PASS=guest
+3. Iniciar os Serviços
 
-# URLs
-DATABASE_URL=postgresql://postgres:postgres@db:5432/noticias
-QUEUE_URL=amqp://rabbitmq:5672
-3. Inicie os serviços com Docker
-bash
-Copy
-docker-compose up -d --build
-4. Aplique as migrações
-bash
-Copy
-docker-compose exec web python manage.py migrate
-5. Crie um superusuário (opcional)
-bash
-Copy
-docker-compose exec web python manage.py createsuperuser
-🌟 Serviços Disponíveis
-Serviço	URL	Porta
-API Django	http://localhost:8000/api	8000
-Admin Django	http://localhost:8000/admin	8000
-RabbitMQ Management	http://localhost:15672	15672
-🔧 Como Usar
-1. Enviar notícias via Webhook
-bash
-Copy
-curl -X POST http://localhost:8000/webhook/noticias/ \
+# Inicie os containers Docker
+docker-compose up -d postgres rabbitmq
+
+# Aplique as migrações do banco de dados
+python manage.py migrate
+
+# Crie um superusuário (para acessar o admin)
+python manage.py createsuperuser
+
+4. Executar a Aplicação
+Em terminais separados:
+
+# Terminal 1: Servidor Django
+python manage.py runserver
+
+# Terminal 2: Consumer de mensagens
+python manage.py start_consumer
+
+A aplicação estará disponível em:
+
+API: http://localhost:8000/api/
+
+Admin: http://localhost:8000/admin/
+
+# Testes
+
+# Executar todos os testes
+python manage.py test noticias
+
+# Executar testes específicos
+python manage.py test noticias.tests.NewsClassificationSystemTest
+python manage.py test noticias.tests.APITests
+
+# Executar com cobertura de código (instalar pytest-cov primeiro)
+pip install pytest-cov
+pytest --cov=noticias --cov-report=html
+
+Teste manual
+
+curl -X POST http://localhost:8000/api/webhook/ \
   -H "Content-Type: application/json" \
   -d '{
-    "titulo": "Exemplo de notícia",
-    "conteudo": "O governo anunciou novas medidas fiscais...",
-    "fonte": "Agência Brasil",
-    "data_publicacao": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
+    "title": "New election polls show surprising results",
+    "content": "The latest election polls indicate a shift in voter preferences...",
+    "source": "Political Daily",
+    "publication_date": "2023-05-17T08:45:00Z"
   }'
-2. Autenticação na API
-bash
-Copy
-# Registrar usuário
-curl -X POST http://localhost:8000/api/auth/register/ \
-  -H "Content-Type: application/json" \
-  -d '{"username": "seuusuario", "password": "suasenha", "email": "email@exemplo.com"}'
-
-# Login
-LOGIN_RESP=$(curl -s -X POST http://localhost:8000/api/auth/login/ \
-  -H "Content-Type: application/json" \
-  -d '{"username": "seuusuario", "password": "suasenha"}')
-TOKEN=$(echo $LOGIN_RESP | jq -r '.access')
-3. Consultar notícias
-bash
-Copy
-# Listar todas
-curl -X GET http://localhost:8000/api/noticias/ \
-  -H "Authorization: Bearer $TOKEN"
-
-# Filtrar por categoria
-curl -X GET "http://localhost:8000/api/noticias/?categoria=tributos" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Buscar por termo
-curl -X GET "http://localhost:8000/api/noticias/?search=imposto" \
-  -H "Authorization: Bearer $TOKEN"
-4. Marcar notícia como urgente
-bash
-Copy
-NOTICIA_ID=$(curl -s http://localhost:8000/api/noticias/ -H "Authorization: Bearer $TOKEN" | jq -r '.results[0].id')
-
-curl -X POST "http://localhost:8000/api/noticias/$NOTICIA_ID/marcar_urgente/" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"nivel": 1}'
-🛠️ Estrutura do Projeto
-Copy
-noticias-api/
-├── api/                 # Endpoints da API
-├── classifier/          # Lógica de classificação
-├── config/              # Configurações Django
-├── noticias/            # Models e serializers
-├── docker-compose.yml   # Configuração Docker
-└── requirements.txt     # Dependências Python
-🧪 Testando o Sistema
-Execute testes unitários:
-
-bash
-Copy
-docker-compose exec web python manage.py test
-Para testes de carga (com Locust):
-
-bash
-Copy
-pip install locust
-locust -f locustfile.py
-🔄 Comandos Úteis
-Parar serviços: docker-compose down
-
-Ver logs: docker-compose logs -f
-
-Acessar shell: docker-compose exec web bash
