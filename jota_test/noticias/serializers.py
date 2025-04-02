@@ -1,41 +1,53 @@
 from rest_framework import serializers
-from .models import Categoria, Subcategoria, Tag, Fonte, Noticia
+from noticias.models import (
+    Category,
+    Subcategory,
+    Tag,
+    Source,
+    News
+)
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
-        fields = ['id', 'nome']
+        fields = ['id', 'name', 'created_at']
 
-class FonteSerializer(serializers.ModelSerializer):
+class SourceSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Fonte
-        fields = ['id', 'nome', 'url']
+        model = Source
+        fields = ['id', 'name', 'url', 'created_at', 'updated_at']
 
-class SubcategoriaSerializer(serializers.ModelSerializer):
-    categoria_nome = serializers.CharField(source='categoria.nome', read_only=True)
+class SubcategorySerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
     
     class Meta:
-        model = Subcategoria
-        fields = ['id', 'nome', 'categoria', 'categoria_nome', 'descricao']
+        model = Subcategory
+        fields = [
+            'id', 'name', 'category', 'category_name', 
+            'description', 'priority', 'created_at', 'updated_at'
+        ]
 
-class CategoriaSerializer(serializers.ModelSerializer):
-    subcategorias = SubcategoriaSerializer(many=True, read_only=True)
+class CategorySerializer(serializers.ModelSerializer):
+    subcategories = SubcategorySerializer(many=True, read_only=True)
     
     class Meta:
-        model = Categoria
-        fields = ['id', 'nome', 'descricao', 'subcategorias']
+        model = Category
+        fields = [
+            'id', 'name', 'description', 
+            'subcategories', 'created_at', 'updated_at'
+        ]
 
-class NoticiaSerializer(serializers.ModelSerializer):
-    categoria = CategoriaSerializer(read_only=True)
-    categoria_id = serializers.PrimaryKeyRelatedField(
-        queryset=Categoria.objects.all(),
-        source='categoria',
+class NewsSerializer(serializers.ModelSerializer):
+    category = CategorySerializer(read_only=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        source='category',
         write_only=True
     )
-    subcategoria = SubcategoriaSerializer(read_only=True)
-    subcategoria_id = serializers.PrimaryKeyRelatedField(
-        queryset=Subcategoria.objects.all(),
-        source='subcategoria',
+    subcategory = SubcategorySerializer(read_only=True)
+    subcategory_id = serializers.PrimaryKeyRelatedField(
+        queryset=Subcategory.objects.all(),
+        source='subcategory',
         write_only=True,
         allow_null=True
     )
@@ -47,33 +59,36 @@ class NoticiaSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
-    fonte = FonteSerializer(read_only=True)
-    fonte_id = serializers.PrimaryKeyRelatedField(
-        queryset=Fonte.objects.all(),
-        source='fonte',
+    source = SourceSerializer(read_only=True)
+    source_id = serializers.PrimaryKeyRelatedField(
+        queryset=Source.objects.all(),
+        source='source',
         write_only=True
     )
-    urgencia_display = serializers.CharField(source='get_urgencia_display', read_only=True)
+    urgency_display = serializers.CharField(source='get_urgency_display', read_only=True)
 
     class Meta:
-        model = Noticia
+        model = News
         fields = [
-            'id', 'titulo', 'conteudo', 'resumo', 'categoria', 'categoria_id',
-            'subcategoria', 'subcategoria_id', 'tags', 'tag_ids', 'fonte', 'fonte_id',
-            'url_original', 'data_publicacao', 'data_recebimento', 'data_atualizacao',
-            'urgencia', 'urgencia_display', 'autor', 'publicado'
+            'id', 'title', 'content', 'summary', 'category', 'category_id',
+            'subcategory', 'subcategory_id', 'tags', 'tag_ids', 'source', 'source_id',
+            'original_url', 'publication_date', 'received_at', 'updated_at',
+            'urgency', 'urgency_display', 'author', 'published', 'created_by'
         ]
-        read_only_fields = ['data_recebimento', 'data_atualizacao', 'criado_por']
+        read_only_fields = [
+            'received_at', 'updated_at', 'created_by',
+            'publication_date', 'original_url'
+        ]
 
-class NoticiaResumidaSerializer(serializers.ModelSerializer):
-    categoria = serializers.StringRelatedField()
-    subcategoria = serializers.StringRelatedField()
-    fonte = serializers.StringRelatedField()
-    urgencia_display = serializers.CharField(source='get_urgencia_display', read_only=True)
+class NewsSummarySerializer(serializers.ModelSerializer):
+    category = serializers.StringRelatedField()
+    subcategory = serializers.StringRelatedField()
+    source = serializers.StringRelatedField()
+    urgency_display = serializers.CharField(source='get_urgency_display', read_only=True)
 
     class Meta:
-        model = Noticia
+        model = News
         fields = [
-            'id', 'titulo', 'resumo', 'categoria', 'subcategoria',
-            'fonte', 'data_publicacao', 'urgencia', 'urgencia_display', 'publicado'
+            'id', 'title', 'summary', 'category', 'subcategory',
+            'source', 'publication_date', 'urgency', 'urgency_display', 'published'
         ]

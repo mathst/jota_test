@@ -1,9 +1,25 @@
 Este projeto implementa uma solução completa para receber, classificar e gerenciar notícias através de uma API REST com Django, utilizando filas RabbitMQ para processamento assíncrono.
 
+<!-- Recebimento: Webhook recebe notícias em JSON e coloca na fila.
+
+Processamento: Worker consome da fila, classifica e salva no banco.
+
+Classificação:
+
+Extrai palavras-chave do texto
+
+Busca correspondências no banco de palavras-chave
+
+Determina categoria, subcategoria e tags
+
+Armazenamento: Salva a notícia classificada no banco de dados.
+
+API: Disponibiliza endpoints para consulta e filtragem. -->
+
 📋 Pré-requisitos
 Docker e Docker Compose
 
-Python 3.9+
+Python 3.12+
 
 WSL2 (para Windows)
 

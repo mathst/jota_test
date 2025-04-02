@@ -1,30 +1,23 @@
-# Use uma imagem base leve
+# Dockerfile
 FROM python:3.12-slim
 
-# Define o diretório de trabalho
 WORKDIR /app
 
-# Instala dependências do sistema
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
 RUN apt-get update && apt-get install -y \
-    build-essential \
+    gcc \
+    python3-dev \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copia os requirements primeiro para aproveitar o cache de camadas
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Instala dependências Python
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
-
-# Copia todo o projeto
 COPY . .
 
-# Permissões para scripts
-RUN chmod +x ./scripts/*.py
+# Adie a execução do collectstatic para o comando de runtime
+# RUN python manage.py collectstatic --noinput
 
-# Porta exposta
-EXPOSE 8000
-
-# Comando de inicialização
-CMD ["sh", "-c", "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "jota_test.wsgi:application"]
